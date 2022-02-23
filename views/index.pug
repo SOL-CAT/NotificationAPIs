@@ -1,0 +1,25 @@
+Doctype 
+   html
+      head
+         title Email Verification
+         style(type='text/css').
+            h1 {
+               text-align: center;
+            }
+            img.Success {
+               content:url("../../../images/greenTick.png");
+               height: 50px;
+               width: 50px;
+            }
+            img.Failed {
+               content:url("../../../images/redCross.png");
+               height: 50px;
+               width: 50px;
+            }
+            .centerImage {
+               text-align: center;
+            }
+      body
+         h1#myHeading CATO Email Verification: #{status}
+         div(class="centerImage")
+            img(class=status alt=status)
