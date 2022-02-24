@@ -10,13 +10,15 @@ const config = {
 }
 
 
-app.get('/twitterInfo/:username/:tweetId', async (req, res) => {
+app.get('/twitterInfo/:username/:tweetId/:projectID', async (req, res) => {
+
     let responseObject = {
         hasUserLiked: false,
         hasUserFollowedPage: false,
         hasUserRetweeted: false,
         hasUserCommented: false
     }
+
     try {
         let username = req.params.username,
             tweetId = req.params.tweetId;
@@ -30,31 +32,49 @@ app.get('/twitterInfo/:username/:tweetId', async (req, res) => {
             if (likes[i].id === tweetId)
             responseObject.hasUserLiked = true;
     }
+
     catch (e) {
         responseObject.hasUserLiked = false;
     }
 
     try {
+        //If user completed comment task
+        let username = req.params.username,
+        projectID = req.params.projectID;
+
+        const responsegetId = await axios.get(twitterAPIUrl + "/users/by/username/" + username, config),
+            userId = responsegetId.data.data.id;
+        
+        const ifCommented = await axios.get(twitterAPIUrl + "/users/" +userId+"/tweets?max_results=5", config),
+            comment = ifCommented.data.data;
+
+            for (let i = 0; i < comment.length; i++){
+                if(comment[i].text.includes(projectID)) 
+                responseObject.hasUserCommented = true;}
 
     }
-    catch (e){
 
+    catch (e){
+        responseObject.hasUserCommented = false;
     }
 
     try {
+        //If user completed retweet task
+        let userName = req.params.username,
+            tweetId = req.params.tweetId;
+
+        const ifRetweeted = await axios.get(twitterAPIUrl + "/tweets/" + tweetId +"/retweeted_by", config),
+            retweet = ifRetweeted.data.data;
+            for (let i = 0; i < retweet.length; i++)
+                if(retweet[i].username === userName)
+                responseObject.hasUserRetweeted = true;    
 
     }
+    
     catch (e){
-        
+        responseObject.hasUserRetweeted = false;
     }
-
-    try {
-
-    }
-    catch (e){
-        
-    }
-
+    
     res.send({ result: responseObject });
 })
 
