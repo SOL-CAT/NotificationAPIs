@@ -5,7 +5,6 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const bodyParser = require("body-parser");
 var cors = require("cors");
-const { response } = require('express');
 var MongoClient = require("mongodb").MongoClient;
 var mongoUrl =
   "mongodb://solanacato:SolanaCato%402021@localhost:27017/?authSource=admin&readPreference=primary&appname=MongoDB%20Compass&directConnection=true&ssl=false";
@@ -50,7 +49,7 @@ app.get('/twitterInfo/:username/:tweetId/:projectID', async (req, res) => {
 
         for (let i = 0; i < likes.length; i++)
             if (likes[i].id === tweetId)
-            responseObject.hasUserLiked = true;
+                responseObject.hasUserLiked = true;
     }
 
     catch (e) {
@@ -60,21 +59,21 @@ app.get('/twitterInfo/:username/:tweetId/:projectID', async (req, res) => {
     try {
         //If user completed comment task
         let username = req.params.username,
-        projectID = req.params.projectID;
+            projectID = req.params.projectID;
 
         const responsegetId = await axios.get(twitterAPIUrl + "/users/by/username/" + username, config),
             userId = responsegetId.data.data.id;
-        
-        const ifCommented = await axios.get(twitterAPIUrl + "/users/" +userId+"/tweets?max_results=5", config),
+
+        const ifCommented = await axios.get(twitterAPIUrl + "/users/" + userId + "/tweets?max_results=5", config),
             comment = ifCommented.data.data;
 
-            for (let i = 0; i < comment.length; i++){
-                if(comment[i].text.includes(projectID)) 
-                responseObject.hasUserCommented = true;}
-
+        for (let i = 0; i < comment.length; i++) {
+            if (comment[i].text.includes(projectID))
+                responseObject.hasUserCommented = true;
+        }
     }
 
-    catch (e){
+    catch (e) {
         responseObject.hasUserCommented = false;
     }
 
@@ -83,51 +82,62 @@ app.get('/twitterInfo/:username/:tweetId/:projectID', async (req, res) => {
         let userName = req.params.username,
             tweetId = req.params.tweetId;
 
-        const ifRetweeted = await axios.get(twitterAPIUrl + "/tweets/" + tweetId +"/retweeted_by", config),
+        const ifRetweeted = await axios.get(twitterAPIUrl + "/tweets/" + tweetId + "/retweeted_by", config),
             retweet = ifRetweeted.data.data;
-            for (let i = 0; i < retweet.length; i++)
-                if(retweet[i].username === userName)
-                responseObject.hasUserRetweeted = true;    
-
+        for (let i = 0; i < retweet.length; i++)
+            if (retweet[i].username === userName)
+                responseObject.hasUserRetweeted = true;
     }
-    
-    catch (e){
+
+    catch (e) {
         responseObject.hasUserRetweeted = false;
     }
-    
     res.send({ result: responseObject });
 })
 
-app.get('/user/verify/:email', async (req, res) => {
+app.get('/user/verify', async (req, res) => {
+    let isVerifiedAlready = false,
+        emailAlreadyInUse = false;
     try {
-        let randomFiveCharacter = Math.random().toString(36).slice(2),
-            hashForString = crypto.createHash('sha256').update(randomFiveCharacter).digest('hex'),
-            query = { email: req.params.email },
-            insertHashObject = { email: req.params.email, hashForString: hashForString, isVerified: false, when: +new Date() },
-            db = await MongoClient.connect(mongoUrl),
+        let db = await MongoClient.connect(mongoUrl),
             dbo = db.db("userValidationtokens"),
+            dbUsers = db.db("userData"),
+            randomFiveCharacter = Math.random().toString(36).slice(2),
+            walletAddress = req.query.wallet,
+            response2 = await dbUsers.collection("users").find({ $or: [{ wallet: walletAddress }, { email: req.query.email }] }).toArray();
+        if (response2.length) {
+            emailAlreadyInUse = true;
+            throw new Error;
+        }
+
+        let hashForString = crypto.createHash('sha256').update(randomFiveCharacter).digest('hex'),
+            query = { wallet: walletAddress },
+            insertHashObject = { wallet: walletAddress, email: req.query.email, hashForString: hashForString, isVerified: false, when: +new Date() },
+
             response = await dbo.collection("userHash").findOne(query);
         if (!response)
             await dbo.collection("userHash").insertOne(insertHashObject);
         else {
-            if (response.isVerified)
+            if (response.isVerified) {
+                isVerifiedAlready = true;
                 throw new Error;
-            await dbo.collection("userHash").updateOne(query, { $set: insertHashObject });
+            }
+            else {
+                await dbo.collection("userHash").updateOne(query, { $set: insertHashObject });
+            }
         }
-        let linkForVerification = "http://localhost:3000/user/attemptVerification/" + req.params.email + "/" + randomFiveCharacter; 
+        let linkForVerification = "http://localhost:3000/user/attemptVerification?email=" + req.query.email + "&code=" + randomFiveCharacter + "&wallet=" + walletAddress;
         let mailOptions = {
-            from: 'catoairdropnotification@gmail.com',
-            to: req.params.email,
-            subject: 'Sending Email using Node.js',
-            text: 'That was easy!',
-            html: '<!DOCTYPE html>'+
-            '<html><head><title>Appointment</title>'+
-            '</head><body><div>'+
-            '<img src="https://raw.githubusercontent.com/SOL-CAT/SOL-CAT/main/CATO512newlogo.png" alt="" width="160">'+
-            '<p>Hello</p>'+
-            '<p>Here is summery:</p>'+
-            '<a href=\"' + linkForVerification + '\">Click here to Verify</a>'+
-            '</div></body></html>'
+            from: 'Cato Airdrop Service',
+            to: req.query.email,
+            subject: 'Verify Account',
+            html: '<!DOCTYPE html>' +
+                '<html><head><title>Verification</title>' +
+                '</head><body><div>' +
+                '<img src="https://raw.githubusercontent.com/SOL-CAT/SOL-CAT/main/CATO512newlogo.png" alt="" width="160">' +
+                '<h1>Welcome to CATO airdrop service!</h1>' +
+                '<a href=\"' + linkForVerification + '\">Click here to Verify</a>' +
+                '</div></body></html>'
         };
 
         transporter.sendMail(mailOptions, function (error, info) {
@@ -141,34 +151,50 @@ app.get('/user/verify/:email', async (req, res) => {
     }
     catch (e) {
         console.log(e);
-        res.status(400).send({
-            message: "Error!"
-        });
+        if (isVerifiedAlready)
+            res.status(400).send({
+                message: "Already Verified"
+            });
+        else if (emailAlreadyInUse)
+            res.status(400).send({
+                message: "Email already in use with different wallet"
+            });
+        else
+            res.status(500).send({
+                message: "Error!"
+            });
     }
 });
 
-app.get('/user/attemptVerification/:email/:code', async (req, res) => {
-    try{
-        let email = req.params.email,
-            stringToHash = req.params.code,
+app.get('/user/attemptVerification', async (req, res) => {
+    try {
+        let email = req.query.email,
+            stringToHash = req.query.code,
+            wallet = req.query.wallet,
             hashForString = crypto.createHash('sha256').update(stringToHash).digest('hex'),
             query = { email: email, isVerified: false },
-        db = await MongoClient.connect(mongoUrl),
-        dbo = db.db("userValidationtokens"),
-        response = await dbo.collection("userHash").findOne(query);
+            db = await MongoClient.connect(mongoUrl),
+            dbo = db.db("userValidationtokens"),
+            response = await dbo.collection("userHash").findOne(query);
         if (!response)
             throw new Error;
         let currentTime = +new Date();
 
-        if (hashForString === response.hashForString && currentTime < response.when + timeToVerify){ 
-            await dbo.collection("userHash").updateOne(query,{$set: {isVerified: true}});
-            res.render("index", {status: "Success"});
+        if (hashForString === response.hashForString && response.wallet === wallet && currentTime < response.when + timeToVerify) {
+            let dbUsers = db.db("userData");
+            let checkIfUserExists = await dbUsers.collection("users").findOne({ $or: [{ wallet: wallet }, { email: email }] });
+            if (checkIfUserExists)
+                throw new Error;
+
+            await dbo.collection("userHash").deleteOne(query);
+            await dbUsers.collection("users").insertOne({ wallet: wallet, email: email, when: + new Date() });
+            res.render("index", { status: "Success" });
         }
         else
             throw new Error;
     }
-    catch(e){
-        res.render("index", {status: "Failed"});
+    catch (e) {
+        res.render("index", { status: "Failed" });
     }
 })
 
