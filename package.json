@@ -11,15 +11,21 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@project-serum/anchor": "^0.18.2",
+    "@solana/buffer-layout": "^4.0.0",
+    "@solana/spl-token": "^0.2.0",
     "axios": "^0.26.0",
     "body-parser": "^1.19.2",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "express": "^4.17.3",
     "mongodb": "^4.4.0",
     "nodemailer": "^6.7.2",
     "nodemon": "^2.0.15",
+    "oauth": "^0.9.15",
     "oauth-1.0a": "^2.2.6",
-    "pug": "^3.0.2"
+    "pug": "^3.0.2",
+    "serverless-http": "^2.7.0"
   }
 }

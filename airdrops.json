@@ -1,0 +1,313 @@
+{
+  "version": "0.0.0",
+  "name": "airdrops",
+  "instructions": [
+    {
+      "name": "initializeUser",
+      "accounts": [
+        {
+          "name": "userAccount",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "userSigner",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "discord",
+          "type": "u64"
+        },
+        {
+          "name": "telegram",
+          "type": "u64"
+        },
+        {
+          "name": "walletKey",
+          "type": "publicKey"
+        },
+        {
+          "name": "since",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "updateUser",
+      "accounts": [
+        {
+          "name": "userAccount",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "twitter",
+          "type": "u64"
+        },
+        {
+          "name": "oldSocials",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "userTaskCompleted",
+      "accounts": [
+        {
+          "name": "userAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "projectAccount",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initializeProject",
+      "accounts": [
+        {
+          "name": "projectAccount",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "projectSigner",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "commissionAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "fromAccountMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "toAccountMint",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "discord",
+          "type": "u64"
+        },
+        {
+          "name": "twitter",
+          "type": "u64"
+        },
+        {
+          "name": "telegram",
+          "type": "u64"
+        },
+        {
+          "name": "walletKey",
+          "type": "publicKey"
+        },
+        {
+          "name": "projectId",
+          "type": "u16"
+        },
+        {
+          "name": "mint",
+          "type": "publicKey"
+        },
+        {
+          "name": "totalAmount",
+          "type": "u64"
+        },
+        {
+          "name": "numberAirdrops",
+          "type": "u16"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "deadline",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "distributeResults",
+      "accounts": [
+        {
+          "name": "userAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "projectAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "fromAccountMint",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "winnerAccount",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "tokenProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "projectAccountSigner",
+          "isMut": true,
+          "isSigner": true
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Project",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "completed",
+            "type": "u8"
+          },
+          {
+            "name": "needFollowers",
+            "type": "u8"
+          },
+          {
+            "name": "discord",
+            "type": "u64"
+          },
+          {
+            "name": "twitter",
+            "type": "u64"
+          },
+          {
+            "name": "telegram",
+            "type": "u64"
+          },
+          {
+            "name": "walletKey",
+            "type": "publicKey"
+          },
+          {
+            "name": "projectId",
+            "type": "u16"
+          },
+          {
+            "name": "mint",
+            "type": "publicKey"
+          },
+          {
+            "name": "totalAmount",
+            "type": "u64"
+          },
+          {
+            "name": "numberAirdrops",
+            "type": "u16"
+          },
+          {
+            "name": "participants",
+            "type": "u16"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "deadline",
+            "type": "u32"
+          },
+          {
+            "name": "fromMintAccount",
+            "type": "publicKey"
+          },
+          {
+            "name": "successfulAirdrops",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "User",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "discord",
+            "type": "u64"
+          },
+          {
+            "name": "twitter",
+            "type": "u64"
+          },
+          {
+            "name": "telegram",
+            "type": "u64"
+          },
+          {
+            "name": "walletKey",
+            "type": "publicKey"
+          },
+          {
+            "name": "level",
+            "type": "u16"
+          },
+          {
+            "name": "since",
+            "type": "u32"
+          },
+          {
+            "name": "tokensReceivedTillDate",
+            "type": "u64"
+          },
+          {
+            "name": "tasksCompleted",
+            "type": {
+              "vec": "u16"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "metadata": {
+    "address": "FBUEWKnigAYNJtAj4cehqUQUWvxrhV9aG23FkRxTQAxN"
+  }
+}
