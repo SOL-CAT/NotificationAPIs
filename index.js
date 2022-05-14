@@ -1,4 +1,6 @@
 const programFunctions = require("./programUtils");
+const twitterFunctions = require("./lib/twitterUtils");
+const dbFunctions = require('./lib/dbUtils');
 const express = require('express');
 const axios = require('axios');
 const oauth1a = require('oauth-1.0a');
@@ -7,8 +9,12 @@ const nodemailer = require('nodemailer');
 const bodyParser = require("body-parser");
 var cors = require("cors");
 var MongoClient = require("mongodb").MongoClient;
+let moment = require("moment");
+let _ = require("lodash");
 var mongoUrl =
   "mongodb://solanacato:SolanaCato%402021@localhost:27017/?authSource=admin&readPreference=primary&appname=MongoDB%20Compass&directConnection=true&ssl=false";
+let db = null
+MongoClient.connect(mongoUrl).then(data => db = data);
 const app = express();
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -23,85 +29,287 @@ var transporter = nodemailer.createTransport({
       pass: 'Cato@2022'
     }
   });
-const port = 3001
-const twitterAPIUrl = "https://api.twitter.com/2"
-const config = {
-    headers: { Authorization: "Bearer AAAAAAAAAAAAAAAAAAAAALpk8gAAAAAAn6IXdcFeShAKr%2BVl1wMS4Bq82zU%3DX2f3h4KKHok5ZpeogFZpjsLF1CWeYEDvPNtQyhj6z7cLlxjHw8" }
-}
+const port = 3001;
 const timeToVerify = 5 * 60 * 1000;
 
-app.get('/twitterInfo/:username/:tweetId/:projectID', async (req, res) => {
+//twitter login part
 
+const cookieParser = require('cookie-parser');
+const oauthCallback="https://498c-115-110-248-75.ngrok.io/";
+const oauth = require('./lib/oauth-promise')(oauthCallback);
+
+app.use(cookieParser());
+
+app.post('/twitter/oauth/request_token', async (req, res) => {
+    const {walletAddress} = req.body;
+    try{
+    const { oauth_token, oauth_token_secret } = await oauth.getOAuthRequestToken();
+    let dbo = db.db("userValidationtokens");
+    dbo.collection("twitter").insertOne({ oauth_token: oauth_token, oauth_token_secret: oauth_token_secret, walletAddress: walletAddress });
+    res.json({ oauth_token });
+    }
+    catch(e){
+        console.log(e)
+    }
+});
+
+app.post('/twitter/oauth/access_token', async (req, res) => {
+    try {
+        const oauth_token = req.body.oauth_token;
+        const oauth_verifier = req.body.oauth_verifier;
+        const walletAddress = req.body.walletAddress;
+        let dbo = db.db("userValidationtokens");
+        let response = await dbo.collection("twitter").findOne({ oauth_token: oauth_token })
+        const oauth_token_secret = response.oauth_token_secret;
+        const { oauth_access_token, oauth_access_token_secret } = await oauth.getOAuthAccessToken(oauth_token, oauth_token_secret, oauth_verifier);
+        let response2 = await dbo.collection("twitter").findOne({ walletAddress, transaction: "Success" });
+        if (response2)
+            throw new Error;
+        dbo.collection("twitter").updateOne({ oauth_token: oauth_token }, { $set: { oauth_access_token, oauth_access_token_secret } });
+        res.json({ success: true });
+
+    } catch (error) {
+        console.log(error);
+        res.status(403).json({ message: "Missing access token" });
+    }
+
+});
+
+app.post("/twitter/users/profile_banner", async (req, res) => {
+    try {
+        const { oauth_token } = req.body;
+        let dbo = db.db("userValidationtokens");
+        let response2 = await dbo.collection("twitter").findOne({ oauth_token: oauth_token });
+        const { oauth_access_token, oauth_access_token_secret } = response2;
+        const response = await oauth.getProtectedResource("https://api.twitter.com/1.1/account/verify_credentials.json", "GET", oauth_access_token, oauth_access_token_secret);
+        let jsonResponse = JSON.parse(response.data);
+        let twitterId =  jsonResponse.id, 
+            dp_url =  jsonResponse.profile_image_url_https,
+            created_at = jsonResponse.created_at,
+            current = moment(),
+            difference = moment.duration(moment(created_at).diff(current));
+
+        if (_.isNaN(difference.asDays()))
+            difference = 0;
+        
+        let response3 = await dbo.collection("twitter").findOne({ twitterId, transaction: "Success" });
+            if (response3)
+                throw new Error;
+        await dbo.collection("twitter").updateOne({ oauth_token }, {$set: {twitterId, dp_url}});
+        res.json({...jsonResponse, oldSocials: difference < -540 ? true : false});
+    } catch (error) {
+        console.log(error);
+        res.status(403).json({ message: "Missing, invalid, or expired tokens" });
+    }
+})
+
+app.post("/twitter/users/save_details", async(req, res) => {
+    let userAlreadyVerifiedTwitter = false,
+        twitterIdAlreadyInUse = false;
+    try {
+        const { twitterId, walletAddress } = req.body;
+        let dbo = db.db("userValidationtokens");
+
+        let response2 = await dbo.collection("twitter").findOne({ walletAddress: walletAddress, transaction: "success" });
+        if (response2){
+            userAlreadyVerifiedTwitter = true;
+            throw new Error;
+        }
+
+        response2 = await dbo.collection("twitter").findOne({ twitterId, transaction: "success" });
+        if (response2){
+            twitterIdAlreadyInUse = true;
+            throw new Error;
+        }
+        await dbo.collection("twitter").updateOne({twitterId, walletAddress}, {$set: {transaction: "Success"}});
+        res.send({ message: "Success" })
+    }
+    catch (e) {
+        console.log(e);
+        if (userAlreadyVerifiedTwitter)
+            res.status(400).send({message: "User Already connected Twitter"});
+        if (twitterIdAlreadyInUse)
+            res.status(400).send({message: "Twitter ID already in use"});
+        res.status(404).json({message: "Unexpected Error"});
+    }
+})
+//twitter login end
+
+//discord login
+
+app.post("/discord/users/getDetails", async(req, res) => {
+    try{
+        const {token_type, access_token} = req.body;
+        let response = await axios({
+            url: 'https://discord.com/api/users/@me',
+            method: "GET",
+            headers: {
+                authorization: `${token_type} ${access_token}`
+            }
+        });
+        let dbo = db.db("userValidationtokens"),
+            discordId = response.data.id;
+        let response2 = await dbo.collection("discord").findOne({ discordId: discordId, transaction: "success" });
+        if (response2){
+            throw new Error;
+        }
+        res.json({id: response.data.id});
+    }
+    catch(e){
+
+        res.status(404).send({message: "Failure"});
+    }
+
+})
+
+app.post("/discord/users/saveDetails", async(req, res) => {
+    let userAlreadyVerifiedDiscord = false,
+        discordIdAlreadyInUse = false;
+    try{
+        const {token_type, access_token, walletAddress, discordId} = req.body;
+        let dbo = db.db("userValidationtokens");
+        let response2 = await dbo.collection("discord").findOne({ walletAddress: walletAddress, transaction: "success" });
+        if (response2){
+            userAlreadyVerifiedDiscord = true;
+            throw new Error;
+        }
+
+        response2 = await dbo.collection("discord").findOne({ discordId: discordId, transaction: "success" });
+        if (response2){
+            discordIdAlreadyInUse = true;
+            throw new Error;
+        }
+
+        await dbo.collection("discord").insertOne({walletAddress: walletAddress, access_token: access_token, token_type: token_type, 
+            discordId: discordId, transaction: "success"});
+        res.send({message: "Success"})
+    }
+    catch(e){
+        console.log(e);
+        if (userAlreadyVerifiedDiscord)
+            res.status(400).send({message: "User Already connected Discord"});
+        if (discordIdAlreadyInUse)
+            res.status(400).send({message: "Discord ID already in use"});
+        if (!userAlreadyVerifiedDiscord && !discordIdAlreadyInUse)
+            res.status(404).send({message: "Unexpected Error"})
+    }
+})
+
+//telegram login
+
+app.post("/telegram/users/getDetails", async (req, res) => {
+    try {
+        const { id } = req.body;
+        let dbo = db.db("userValidationtokens");
+        response2 = await dbFunctions.dbHelpers.isUserIdInDb("telegram" ,id, dbo);
+        if (response2) 
+            throw new Error;
+        res.send({message: "success"})
+    }
+    catch (e) {
+        console.log(e);
+        res.status(400).json({ message: "Telegram Id already in use" });
+    }
+
+});
+
+app.post("/telegram/users/saveDetails", async (req, res) => {
+    let userAlreadyVerifiedTelegram = false,
+        telegramIdAlreadyInUse = false;
+    try {
+        const { id, walletAddress } = req.body;
+        let dbo = db.db("userValidationtokens");
+        let response2 = await dbFunctions.dbHelpers.isWalletInDb(walletAddress, "telegram", dbo);
+        if (response2) {
+            userAlreadyVerifiedTelegram = true;
+            throw new Error;
+        }
+        response2 = await dbFunctions.dbHelpers.isUserIdInDb("telegram" ,id, dbo);
+        if (response2) {
+            telegramIdAlreadyInUse = true;
+            throw new Error;
+        }
+        await dbo.collection("telegram").insertOne({
+            walletAddress: walletAddress, telegramId: id, transaction: "success"
+        });
+        res.send({ message: "Success" })
+    }
+    catch (e) {
+        console.log(e);
+        if (userAlreadyVerifiedTelegram)
+            res.status(400).json({ message: "User Already connected Telegram" });
+        else if (telegramIdAlreadyInUse)
+            res.status(400).json({ message: "Telegram Id already in use" });
+        else if (!telegramIdAlreadyInUse && !userAlreadyVerifiedTelegram)
+            res.status(404).json({message: "Unexpected Error"});
+    }
+
+})
+
+app.post("/socials/connection/status", async(req, res) => {
+    let responseObject = {
+        discord: false,
+        twitter: false,
+        telegram: false
+    };
+    try{
+        const {walletAddress} = req.body;
+        let dbObject = db.db("userValidationtokens"),
+            twitter = await dbFunctions.dbHelpers.isWalletInDb(walletAddress, "twitter",dbObject),
+            discord = await dbFunctions.dbHelpers.isWalletInDb(walletAddress, "discord", dbObject),
+            telegram = await dbFunctions.dbHelpers.isWalletInDb(walletAddress, "telegram", dbObject);
+        responseObject = {
+            twitter: twitter,
+            discord: discord,
+            telegram: telegram
+        };
+        res.send(responseObject);
+    }
+    catch(e){
+        res.status(400).send({message: "Wallet Address Missing"});
+    }
+})
+
+app.get('/twitterInfo/:userId/:tweetId/:projectID', async (req, res) => {
+    const {userId, tweetId, projectID} = req.params;
     let responseObject = {
         hasUserLiked: false,
         hasUserFollowedPage: false,
         hasUserRetweeted: false,
         hasUserCommented: false
     }
+    let hasUserLiked = await twitterFunctions.twitterHelpers.hasUserLiked(userId, tweetId);
+    responseObject.hasUserLiked = hasUserLiked;
 
-    try {
-        let username = req.params.username,
-            tweetId = req.params.tweetId;
-        const responsegetId = await axios.get(twitterAPIUrl + "/users/by/username/" + username, config),
-            userId = responsegetId.data.data.id;
+    let {hasUserCommented, hasUserRetweeted} = await twitterFunctions.twitterHelpers.hasUserCommentedAndRetweeted(userId, projectID);
+    responseObject.hasUserCommented = hasUserCommented;
+    responseObject.hasUserRetweeted = hasUserRetweeted;
 
-        const ifLiked = await axios.get(twitterAPIUrl + "/users/" + userId + "/liked_tweets?max_results=10", config),
-            likes = ifLiked.data.data;
-
-        for (let i = 0; i < likes.length; i++)
-            if (likes[i].id === tweetId)
-                responseObject.hasUserLiked = true;
-    }
-
-    catch (e) {
-        responseObject.hasUserLiked = false;
-    }
-
-    try {
-        //If user completed comment task
-        let username = req.params.username,
-            projectID = req.params.projectID;
-
-        const responsegetId = await axios.get(twitterAPIUrl + "/users/by/username/" + username, config),
-            userId = responsegetId.data.data.id;
-
-        const ifCommented = await axios.get(twitterAPIUrl + "/users/" + userId + "/tweets?max_results=5", config),
-            comment = ifCommented.data.data;
-
-        for (let i = 0; i < comment.length; i++) {
-            if (comment[i].text.includes(projectID))
-                responseObject.hasUserCommented = true;
-        }
-    }
-
-    catch (e) {
-        responseObject.hasUserCommented = false;
-    }
-
-    try {
-        //If user completed retweet task
-        let userName = req.params.username,
-            tweetId = req.params.tweetId;
-
-        const ifRetweeted = await axios.get(twitterAPIUrl + "/tweets/" + tweetId + "/retweeted_by", config),
-            retweet = ifRetweeted.data.data;
-        for (let i = 0; i < retweet.length; i++)
-            if (retweet[i].username === userName)
-                responseObject.hasUserRetweeted = true;
-    }
-
-    catch (e) {
-        responseObject.hasUserRetweeted = false;
-    }
     res.send({ result: responseObject });
 })
+
+app.get('/airdrops/get', async (req, res) => {
+    try{
+    let dbo = db.db("projects");
+    let response = await dbo.collection("metadata").find({}).toArray();
+    if (response.length)
+        return res.send({data: response});
+    else
+        return res.send({data: []});
+    }
+    catch(e){
+        console.log(e);
+        return res.send({data: []});    
+    }
+
+})
+
 
 app.get('/user/verify', async (req, res) => {
     let isVerifiedAlready = false,
         emailAlreadyInUse = false;
     try {
-        let db = await MongoClient.connect(mongoUrl),
-            dbo = db.db("userValidationtokens"),
+        let dbo = db.db("userValidationtokens"),
             dbUsers = db.db("userData"),
             randomFiveCharacter = Math.random().toString(36).slice(2),
             walletAddress = req.query.wallet,
@@ -174,7 +382,6 @@ app.get('/user/attemptVerification', async (req, res) => {
             wallet = req.query.wallet,
             hashForString = crypto.createHash('sha256').update(stringToHash).digest('hex'),
             query = { email: email, isVerified: false },
-            db = await MongoClient.connect(mongoUrl),
             dbo = db.db("userValidationtokens"),
             response = await dbo.collection("userHash").findOne(query);
         if (!response)
