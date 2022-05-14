@@ -22,6 +22,12 @@ app.use(bodyParser.json());
 app.set('view engine', 'pug');
 app.set('views', './views');
 app.use('/images', express.static('images'));
+
+//serve UI
+const path = require("path");
+const root = path.join(__dirname, "airdrop-ui");
+app.use(express.static(root));
+//
 var transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
@@ -35,7 +41,7 @@ const timeToVerify = 5 * 60 * 1000;
 //twitter login part
 
 const cookieParser = require('cookie-parser');
-const oauthCallback="https://498c-115-110-248-75.ngrok.io/";
+const oauthCallback="https://catotreat.com/";
 const oauth = require('./lib/oauth-promise')(oauthCallback);
 
 app.use(cookieParser());
@@ -405,6 +411,10 @@ app.get('/user/attemptVerification', async (req, res) => {
         res.render("index", { status: "Failed" });
     }
 })
+
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "airdrop-ui", "index.html"));
+});
 
 app.listen(port, () => {
     console.log(`Example app listening on port ${port}`)
