@@ -252,6 +252,8 @@ app.post("/telegram/users/saveDetails", async (req, res) => {
 
 })
 
+//login end
+
 app.post("/socials/connection/status", async(req, res) => {
     let responseObject = {
         discord: false,
@@ -282,7 +284,8 @@ app.get('/twitterInfo/:userId/:tweetId/:projectID', async (req, res) => {
         hasUserLiked: false,
         hasUserFollowedPage: false,
         hasUserRetweeted: false,
-        hasUserCommented: false
+        hasUserCommented: false,
+        hasUserJoinedDiscordServer: false
     }
     let hasUserLiked = await twitterFunctions.twitterHelpers.hasUserLiked(userId, tweetId);
     responseObject.hasUserLiked = hasUserLiked;
@@ -291,6 +294,10 @@ app.get('/twitterInfo/:userId/:tweetId/:projectID', async (req, res) => {
     responseObject.hasUserCommented = hasUserCommented;
     responseObject.hasUserRetweeted = hasUserRetweeted;
 
+    let hasUserFollowed = await twitterFunctions.twitterHelpers.hasUserFollowed(userId, projectID);
+    responseObject.hasUserFollowedPage = hasUserFollowed;
+    let hasUserJoinedDiscordServer = await twitterFunctions.twitterHelpers.hasUserJoinedDiscordServer(791200266, '927299268044267580')
+    responseObject.hasUserJoinedDiscordServer = hasUserJoinedDiscordServer;
     res.send({ result: responseObject });
 })
 
